@@ -253,6 +253,7 @@ void get_bbs_for_each_rank(function *fun) {
     while (std::find(bbs_for_each_rank.back().begin(), bbs_for_each_rank.back().end(), exit_bb) == bbs_for_each_rank.back().end()) {
         std::set<basic_block> next_rank_set;
 
+        // non fonctionnel, remplacer la boucle for par un while non vide sur une pile
         for (basic_block bb : bbs_for_each_rank.back()) {
             if (bb->succs) {
                 for (size_t i = 0; i < bb->succs->length(); ++i) {
