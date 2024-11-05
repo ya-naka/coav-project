@@ -21,14 +21,13 @@ OBJS=plugin.o
 libplugin.so: $(OBJS)
 	$(CXX) -shared $(GMP_CFLAGS) -o $@ $^
 
-test_%: tests/test_%.c libplugin.so
+test_%: test_%.c libplugin.so
 	OMPI_MPICC=$(CC) $(MPICC) $< $(CFLAGS) -o $@ -fplugin=./libplugin.so
 
 
 .PHONY: clean cleanall
 clean:
 	rm -rf $(EXE)
-	rm -rf test_*
 	rm -rf *.o
 
 cleanall: clean

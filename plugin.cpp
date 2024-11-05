@@ -53,6 +53,7 @@ int plugin_is_GPL_compatible;
 
 
 static vec<tree> fname_vec;
+vec<const unsigned char*> pragma_instrumented_functions {};
 
 void insert_pragma(tree elem){
     fname_vec.safe_push(elem);
@@ -110,7 +111,6 @@ static void handle_pragma_fx(cpp_reader *dummy ATTRIBUTE_UNUSED){
     if (CPP_CLOSE_PAREN == token) {
         if (!close_paren_needed) {
             error("%<#pragma instrumente option%> unexpected closing perenthesis");
-            // return;
         }
         close_paren_needed = false;
         token = pragma_lex(&pragma_arg);
@@ -122,6 +122,7 @@ static void handle_pragma_fx(cpp_reader *dummy ATTRIBUTE_UNUSED){
         }
     }
 }
+
 
 
 // ---------- GRAPHVIZ ---------- //
@@ -275,7 +276,7 @@ class mpi_collective_pass : public gimple_opt_pass {
 	    printf("Plugin is executing verification on function %s.... \n", func_name);
 	    
         //on divise les blocks pour chaque nouvel appel de fonction mpi après le premier trouvé
-	   divide_blocks(fun);
+	    divide_blocks(fun);
 
 	    cfgviz_dump(fun, "after_split");
     
@@ -304,6 +305,5 @@ int plugin_init(struct plugin_name_args *plugin_infos, struct plugin_gcc_version
     mpi_pass_info.pos_op = PASS_POS_INSERT_AFTER;
 
     register_callback(PLUGIN_NAME, PLUGIN_PASS_MANAGER_SETUP, NULL, &mpi_pass_info);
-
     return 0;
 }
