@@ -192,20 +192,29 @@ enum mpi_collective_code get_mpi_func_code(gimple * stmt){
 	return LAST_AND_UNUSED_MPI_COLLECTIVE_CODE;
 } 
 
+enum mpi_collective_code get_mpi_func_code(basic_block * bb){
+    mpi_collective_code code;
+
+    for (gimple_stmt_iterator gsi = gsi_start_bb(bb); !gsi_end_p(gsi); gsi_next(&gsi)) {
+        gimple* stmt = gsi_stmt(gsi);
+        code = get_mpi_func_code(stmt);
+        if(code != LAST_AND_UNUSED_MPI_COLLECTIVE_CODE) return code;
+    }
+
+    return LAST_AND_UNUSED_MPI_COLLECTIVE_CODE;
+}
+
+
 //retourne le nombre d'appels à une fonction mpi contient la fonction envoyée en paramètre
-int get_nb_mpi_calls_in(function * fun){
-	int nb_mpi_calls = 0;
+int get_nb_mpi_calls_in(basic_block * bb){
+    int nb_mpi_calls = 0;
 
-	basic_block bb;
-
-	FOR_EACH_BB_FN(bb, fun){
+    FOR_EACH_BB_FN(bb, fun){
 		for (gimple_stmt_iterator gsi = gsi_start_bb(bb); !gsi_end_p(gsi); gsi_next(&gsi)) {
             gimple* stmt = gsi_stmt(gsi);
             if(get_mpi_func_code(stmt) != LAST_AND_UNUSED_MPI_COLLECTIVE_CODE) nb_mpi_calls++;
         }
 	}
-
-	return nb_mpi_calls;
 }
 
 //divise chaque bloc de la fonction en 2 blocs pour n'avoir au plus qu'une fonction collective mpi par bloc
@@ -227,6 +236,34 @@ void divide_blocks(function * fun){
         }
 	}
 	
+}
+
+//vérifie s'il y a un problème de concordance dans les rangs du cfg pour les fonctions mpi présentes
+bool is_mpi_rank_correct(vector<vector<basic_block> bbs> bb_ranked){
+	//pour chaque rang
+	for(int i = 0; i < bb_ranked.size; i++){
+		if(!bb_ranked[i].empty){
+            mpi_collective_code rank_code = NULL;
+            //on vérifie qu'il y a au moins un basic_block dans le rang actuel
+            if(!bb_ranked[i][0].empty)
+                //pour chaque basic_block au rang i
+                for(int j = 0; j < bb_ranked[i].size; j++){
+                    if(get_nb_mpi_calls_in(bb_ranked[i][j]) == 1){
+                        enum mpi_collective_code curr_rank_code = get_mpi_func_code(bb_ranked[i][j]);
+                        if(rank_code == NULL){
+                            rank_code = curr_rank_code;
+                        }else{
+                            if(rank_code != curr_rank_code){
+                                printf("Incohérence dans l'ordre des appels de fonction MPI au rang %d\n", i);
+                                return false;
+                            }
+                        }
+                    }
+                }
+		    }
+	    }
+
+	return true;
 }
 
 // ---------- GCC PLUGIN DEFINITION ---------- //
