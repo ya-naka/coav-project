@@ -279,6 +279,15 @@ class mpi_collective_pass : public gimple_opt_pass {
 	    divide_blocks(fun);
 
 	    cfgviz_dump(fun, "after_split");
+
+        //initialisation des bitmaps
+        basic_block bb;
+	    bitmap_head *cfg_nodes;
+	    cfg_nodes = XNEWVEC (bitmap_head, last_basic_block_for_fn (fun));
+
+	    FOR_ALL_BB_FN(bb, fun) {
+            bitmap_initialize(&cfg_nodes[bb->index], &bitmap_default_obstack);
+        }
     
         return 0;
         }
