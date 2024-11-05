@@ -12,6 +12,10 @@
 #include <diagnostic-core.h>
 #include <vec.h>
 
+#include <vector>
+#include <set>
+#include <algorithm>
+
 
 // ---------- GLOBALES ---------- //
 
@@ -195,7 +199,7 @@ enum mpi_collective_code get_mpi_func_code(gimple * stmt){
 enum mpi_collective_code get_mpi_func_code(basic_block * bb){
     mpi_collective_code code;
 
-    for (gimple_stmt_iterator gsi = gsi_start_bb(bb); !gsi_end_p(gsi); gsi_next(&gsi)) {
+    for (gimple_stmt_iterator gsi = gsi_start_bb((*bb)); !gsi_end_p(gsi); gsi_next(&gsi)) {
         gimple* stmt = gsi_stmt(gsi);
         code = get_mpi_func_code(stmt);
         if(code != LAST_AND_UNUSED_MPI_COLLECTIVE_CODE) return code;
@@ -209,8 +213,8 @@ enum mpi_collective_code get_mpi_func_code(basic_block * bb){
 int get_nb_mpi_calls_in(basic_block * bb){
     int nb_mpi_calls = 0;
 
-    FOR_EACH_BB_FN(bb, fun){
-		for (gimple_stmt_iterator gsi = gsi_start_bb(bb); !gsi_end_p(gsi); gsi_next(&gsi)) {
+    FOR_EACH_BB_FN(bb, cfun){
+		for (gimple_stmt_iterator gsi = gsi_start_bb((*bb)); !gsi_end_p(gsi); gsi_next(&gsi)) {
             gimple* stmt = gsi_stmt(gsi);
             if(get_mpi_func_code(stmt) != LAST_AND_UNUSED_MPI_COLLECTIVE_CODE) nb_mpi_calls++;
         }
@@ -235,11 +239,48 @@ void divide_blocks(function * fun){
 			}
         }
 	}
-	
 }
 
+
+void get_bbs_for_each_rank(function *fun) {
+    std::vector<std::set<basic_block>> bbs_for_each_rank;
+
+    basic_block entry_bb = ENTRY_BLOCK_PTR_FOR_FN(fun);
+    basic_block exit_bb = EXIT_BLOCK_PTR_FOR_FN(fun);
+
+    bbs_for_each_rank.push_back({entry_bb});
+
+    while (std::find(bbs_for_each_rank.back().begin(), bbs_for_each_rank.back().end(), exit_bb) == bbs_for_each_rank.back().end()) {
+        std::set<basic_block> next_rank_set;
+
+        for (basic_block bb : bbs_for_each_rank.back()) {
+            if (bb->succs) {
+                for (size_t i = 0; i < bb->succs->length(); ++i) {
+                    edge e = (*bb->succs)[i];
+                    if (e->dest) {
+                        //si appel de fonction mpi trouvé
+                        if (get_mpi_func_code(stmt) == LAST_AND_UNUSED_MPI_COLLECTIVE_CODE) {
+                            bbs_for_each_rank.back().insert(e->dest);
+                        }
+                        else {
+                            next_rank_set.insert(e->dest);  // Ensures unique blocks for each rank
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Convert sets to vectors for the final output
+    std::vector<std::vector<basic_block>> bb_ranked;
+    for (const auto& rank_set : bbs_for_each_rank) {
+        bb_ranked.push_back(std::vector<basic_block>(rank_set.begin(), rank_set.end()));
+    }
+}
+
+
 //vérifie s'il y a un problème de concordance dans les rangs du cfg pour les fonctions mpi présentes
-bool is_mpi_rank_correct(vector<vector<basic_block> bbs> bb_ranked){
+bool is_mpi_rank_correct(vector<vector<basic_block>> bb_ranked){
 	//pour chaque rang
 	for(int i = 0; i < bb_ranked.size; i++){
 		if(!bb_ranked[i].empty){
@@ -249,7 +290,7 @@ bool is_mpi_rank_correct(vector<vector<basic_block> bbs> bb_ranked){
                 //pour chaque basic_block au rang i
                 for(int j = 0; j < bb_ranked[i].size; j++){
                     if(get_nb_mpi_calls_in(bb_ranked[i][j]) == 1){
-                        enum mpi_collective_code curr_rank_code = get_mpi_func_code(bb_ranked[i][j]);
+                        enum mpi_collective_code curr_rank_code = get_mpi_func_code(&bb_ranked[i][j]);
                         if(rank_code == NULL){
                             rank_code = curr_rank_code;
                         }else{
@@ -316,6 +357,11 @@ class mpi_collective_pass : public gimple_opt_pass {
 	    divide_blocks(fun);
 
 	    cfgviz_dump(fun, "after_split");
+
+
+        vector<vector<basic_block>> bb_ranked = get_bbs_for_each_rank(fun);
+        is_mpi_rank_correct(bb_ranked);
+
 
         //initialisation des bitmaps
         basic_block bb;
